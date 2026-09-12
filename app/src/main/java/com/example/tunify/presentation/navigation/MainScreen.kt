@@ -1,5 +1,6 @@
 package com.example.tunify.presentation.navigation
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -20,7 +21,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
@@ -84,12 +87,28 @@ fun MainScreen() {
             startDestination = Screen.HomeFeed.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+
+            // 1. Home Feed Tab
             composable(Screen.HomeFeed.route) {
-                // TODO: Put your FeedScreen here!
-                Text("Feed Screen goes here", color = Color.White)
+                val feedViewModel: com.example.tunify.presentation.feed.FeedViewModel = hiltViewModel()
+
+                val tracks by feedViewModel.tracks.collectAsState()
+                val isLoading by feedViewModel.isLoading.collectAsState()
+
+                if (isLoading) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(color = Color(0xFFD8B4FE))
+                    }
+                } else if (tracks.isNotEmpty()) {
+                    com.example.tunify.presentation.feed.FeedScreen(tracks = tracks)
+                }
             }
+
+            // 2. Search & Explore Tab
             composable(Screen.SearchExplore.route) {
-                // TODO: We will build the Spotify-style Search screen here!
                 Text("Search Screen goes here", color = Color.White)
             }
         }

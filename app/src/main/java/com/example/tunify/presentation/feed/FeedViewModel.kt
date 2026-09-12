@@ -3,6 +3,7 @@ package com.example.tunify.presentation.feed
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tunify.core.common.Resource
+import com.example.tunify.data.local.UserPreferences
 import com.example.tunify.domain.model.Track
 import com.example.tunify.domain.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,23 +15,47 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
-    private val repository: TrackRepository
+    private val trackRepository: TrackRepository,
+    private val userPreferences: UserPreferences // Injecting the local memory
 ) : ViewModel() {
 
-    // Mutable state that we can update internally
-    private val _feedState = MutableStateFlow<Resource<List<Track>>>(Resource.Success(emptyList()))
+    private val _tracks = MutableStateFlow<List<Track>>(emptyList())
+    val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
 
-    // Immutable state that the Compose UI can observe
-    val feedState: StateFlow<Resource<List<Track>>> = _feedState.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    /**
-     * Triggers a network request to fetch 30-second previews.
-     */
-    fun fetchDiscoveryFeed(query: String = "synthwave") {
+    init {
+        loadPersonalizedFeed()
+    }
+
+    private fun loadPersonalizedFeed() {
         viewModelScope.launch {
-            // Collect the Flow from the repository (Loading -> Success/Error)
-            repository.searchTracks(query).collect { result ->
-                _feedState.value = result
+            // Read the saved genres from DataStore
+            userPreferences.savedGenres.collect { genres ->
+                // V1 Algorithm: Pick a random genre from their favorites to create a dynamic crate.
+                // If the set is empty (fallback), default to "pop"
+                val activeGenre = if (genres.isNotEmpty()) genres.random() else "pop"
+
+                fetchTracks(activeGenre)
+            }
+        }
+    }
+
+    private fun fetchTracks(query: String) {
+        viewModelScope.launch {
+            trackRepository.searchTracks(query).collect { resource ->
+                when (resource) {
+                    is Resource.Loading -> _isLoading.value = true
+                    is Resource.Success -> {
+                        _isLoading.value = false
+                        _tracks.value = resource.data ?: emptyList()
+                    }
+                    is Resource.Error -> {
+                        _isLoading.value = false
+                        // TODO: Handle Error State (e.g., show a Toast)
+                    }
+                }
             }
         }
     }
