@@ -37,12 +37,13 @@ class FeedViewModel @Inject constructor(
                 // If the set is empty (fallback), default to "pop"
                 val activeGenre = if (genres.isNotEmpty()) genres.random() else "pop"
 
-                fetchTracks(activeGenre)
+                fetchNewCrate(activeGenre)
             }
         }
     }
 
-    private fun fetchTracks(query: String) {
+    // Changed from private to public so the Search Screen can trigger it
+    fun fetchNewCrate(query: String) {
         viewModelScope.launch {
             trackRepository.searchTracks(query).collect { resource ->
                 when (resource) {
@@ -53,10 +54,10 @@ class FeedViewModel @Inject constructor(
                     }
                     is Resource.Error -> {
                         _isLoading.value = false
-                        // TODO: Handle Error State (e.g., show a Toast)
+                        // TODO: Handle Error State
                     }
                 }
             }
         }
     }
-}
+    }
