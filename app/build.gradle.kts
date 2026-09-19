@@ -94,6 +94,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     // Jetpack Navigation for Compose
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.media3:media3-session:1.2.0") // Or match your exoplayer version
 
     //compose
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
