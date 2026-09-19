@@ -14,7 +14,10 @@ import androidx.compose.ui.unit.sp
 import com.example.tunify.domain.model.Track
 import com.example.tunify.presentation.feed.components.ActionRail
 import com.example.tunify.presentation.feed.components.SegmentedScrubber
+import com.example.tunify.presentation.feed.components.SmoothNeonProgressBar
 import com.example.tunify.presentation.feed.components.VinylStage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun FeedScreen(tracks: List<Track>) {
@@ -28,6 +31,9 @@ fun FeedScreen(tracks: List<Track>) {
     // Local UI state
     var isStashed by remember { mutableStateOf(false) }
     var isLiked by remember { mutableStateOf(false) }
+
+    // Keep track of the current playback second
+    var currentProgressSeconds by remember { mutableIntStateOf(0) }
 
     // --- THE AUDIO ENGINE (ExoPlayer) ---
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -45,6 +51,50 @@ fun FeedScreen(tracks: List<Track>) {
         // When the URL changes (user swipes to next song), stop the current playback
         onDispose {
             exoPlayer.stop()
+        }
+    }
+
+// We now track raw milliseconds for extreme precision
+    var currentProgressMs by remember { mutableLongStateOf(0L) }
+
+// --- THE AUDIO TRACKER (60 FPS & CROSSFADE) ---
+    LaunchedEffect(currentTrack.previewUrl) {
+        currentProgressMs = 0L
+
+        while (isActive) {
+            if (exoPlayer.isPlaying) {
+                currentProgressMs = exoPlayer.currentPosition
+
+                // === NEW: DYNAMIC VOLUME CROSSFADE ===
+                val fadeDurationMs = 2000f // 2 seconds of fading
+
+                val currentVolume = when {
+                    // Fade In: First 2 seconds (0 to 2000ms)
+                    currentProgressMs < fadeDurationMs -> {
+                        currentProgressMs / fadeDurationMs
+                    }
+                    // Fade Out: Last 2 seconds (28000 to 30000ms)
+                    currentProgressMs > (30_000f - fadeDurationMs) -> {
+                        (30_000f - currentProgressMs) / fadeDurationMs
+                    }
+                    // Full Volume: Middle of the track
+                    else -> 1.0f
+                }
+
+                // Apply the exact volume level directly to the player hardware
+                exoPlayer.volume = currentVolume.coerceIn(0f, 1f)
+
+                // AUTOPLAY LOGIC: 30 seconds
+                if (currentProgressMs >= 30_000L) {
+                    if (currentTrackIndex < tracks.size - 1) {
+                        currentTrackIndex++
+                        isStashed = false
+                        isLiked = false
+                        currentProgressMs = 0L
+                    }
+                }
+            }
+            delay(16L) // Keep UI at 60 FPS
         }
     }
 
@@ -93,6 +143,7 @@ fun FeedScreen(tracks: List<Track>) {
                             currentTrackIndex++
                             isStashed = false
                             isLiked = false
+                            currentProgressSeconds = 0 // Instant UI reset
                         }
                     }
                 )
@@ -132,10 +183,9 @@ fun FeedScreen(tracks: List<Track>) {
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
-
                     SegmentedScrubber(
-                        progressSeconds = 0, // Hardcoded for now, we will sync this to the audio later
-                        totalSeconds = 30
+                        currentMs = currentProgressMs, // Passing the 60fps millisecond tracker!
+                        totalMs = 30000L
                     )
                 }
 

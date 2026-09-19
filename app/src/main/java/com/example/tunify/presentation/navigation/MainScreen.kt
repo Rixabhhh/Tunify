@@ -61,7 +61,6 @@ fun MainScreen(
                         unselectedTextColor = Color.Gray
                     )
                 )
-
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                     label = { Text("Search") },
