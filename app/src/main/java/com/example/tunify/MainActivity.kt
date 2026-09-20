@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -19,7 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.tunify.data.local.UserPreferences
-import com.example.tunify.presentation.navigation.MainScreen
+import com.example.tunify.presentation.TunifyNavigation
 import com.example.tunify.presentation.navigation.Screen
 import com.example.tunify.presentation.onboarding.OnboardingScreen
 import com.example.tunify.presentation.onboarding.OnboardingViewModel
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge() // Enables drawing behind system bars for a cinematic look
         setContent {
             TunifyTheme {
                 val hasCompletedOnboarding by userPreferences.hasCompletedOnboarding.collectAsState(initial = null)
@@ -43,7 +45,7 @@ class MainActivity : ComponentActivity() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission(),
-                        onResult = { /* Silent handling, Android automatically manages the denial state */ }
+                        onResult = { /* Silent handling */ }
                     )
 
                     // Only launch the prompt IF they have finished onboarding
@@ -78,7 +80,8 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable(Screen.Main.route) {
-                                MainScreen()
+                                // Injecting our new premium navigation hub here
+                                TunifyNavigation()
                             }
                         }
                     }

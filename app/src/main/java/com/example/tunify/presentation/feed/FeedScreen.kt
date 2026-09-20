@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,107 +20,119 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.example.tunify.core.service.AudioService // Ensure this matches your actual service path
+import com.example.tunify.core.service.AudioService
 import com.example.tunify.domain.model.Track
 import com.example.tunify.presentation.feed.components.ActionRail
 import com.example.tunify.presentation.feed.components.SegmentedScrubber
+import com.example.tunify.presentation.feed.components.StashBottomSheet
 import com.example.tunify.presentation.feed.components.VinylStage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-fun FeedScreen(tracks: List<Track>) {
-    if (tracks.isEmpty()) return
+fun FeedScreen(
+    viewModel: FeedViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
+    tracks: List<Track>,
+    isLoading: Boolean,
+    errorMessage: String?
+) {
+    if (isLoading && tracks.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF060709)), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFFD8B4FE))
+        }
+        return
+    }
 
-    var currentTrackIndex by remember { mutableIntStateOf(0) }
+    if (errorMessage != null && tracks.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF060709)), contentAlignment = Alignment.Center) {
+            Text(errorMessage, color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(32.dp))
+        }
+        return
+    }
+
+    if (tracks.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF060709)), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFFD8B4FE))
+        }
+        return
+    }
+
+    // --- 1. USE VIEWMODEL STATE INSTEAD OF LOCAL STATE ---
+    val currentTrackIndex by viewModel.currentTrackIndex.collectAsState()
+    val crateTitle by viewModel.currentCrateTitle.collectAsState()
     val currentTrack = tracks[currentTrackIndex]
 
-    var isStashed by remember { mutableStateOf(false) }
+    var showStashSheet by remember { mutableStateOf(false) }
+    val customVaults by viewModel.customVaults.collectAsState()
+    val activeVaultIds by viewModel.activeTrackVaultIds.collectAsState()
+
+    LaunchedEffect(currentTrack.id) {
+        viewModel.checkVaultsForTrack(currentTrack.id)
+    }
+
     var isLiked by remember { mutableStateOf(false) }
     var currentProgressMs by remember { mutableLongStateOf(0L) }
 
     val context = LocalContext.current
     var mediaController by remember { mutableStateOf<MediaController?>(null) }
 
-    // --- 1. CONNECT TO THE BACKGROUND SERVICE ---
     DisposableEffect(Unit) {
         val sessionToken = SessionToken(context, ComponentName(context, AudioService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-
-        controllerFuture.addListener(
-            { mediaController = controllerFuture.get() },
-            ContextCompat.getMainExecutor(context)
-        )
-
+        controllerFuture.addListener({ mediaController = controllerFuture.get() }, ContextCompat.getMainExecutor(context))
         onDispose {
             MediaController.releaseFuture(controllerFuture)
             mediaController?.release()
         }
     }
 
-// --- 2. LOAD TRACK WITH FULL METADATA FOR NOTIFICATIONS ---
-    LaunchedEffect(currentTrack.previewUrl, mediaController) {
+    LaunchedEffect(currentTrack.id, mediaController) {
         mediaController?.let { controller ->
             if (currentTrack.previewUrl.isNotEmpty()) {
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(currentTrack.title)
+                    .setArtist(currentTrack.artist)
+                    .setArtworkUri(Uri.parse(currentTrack.coverArtUrl))
+                    .build()
 
-                // === NEW: SYNC CHECK ===
-                // What is the background service already playing?
-                val currentlyPlayingId = controller.currentMediaItem?.mediaId
+                val mediaItem = MediaItem.Builder()
+                    .setUri(currentTrack.previewUrl)
+                    .setMediaId(currentTrack.id) // Bind strictly to the exact ID
+                    .setMediaMetadata(metadata)
+                    .build()
 
-                // Only override the audio engine if the UI is trying to play a DIFFERENT song
-                if (currentlyPlayingId != currentTrack.title) {
-                    val metadata = androidx.media3.common.MediaMetadata.Builder()
-                        .setTitle(currentTrack.title)
-                        .setArtist(currentTrack.artist)
-                        .setArtworkUri(android.net.Uri.parse(currentTrack.coverArtUrl))
-                        .build()
+                // 1. Force the player to stop the ghost track in the background
+                controller.stop()
 
-                    val mediaItem = androidx.media3.common.MediaItem.Builder()
-                        .setUri(currentTrack.previewUrl)
-                        .setMediaId(currentTrack.title) // We use the title as the unique ID
-                        .setMediaMetadata(metadata)
-                        .build()
+                // 2. Load the exact item you clicked
+                controller.setMediaItem(mediaItem)
+                controller.prepare()
 
-                    controller.setMediaItem(mediaItem)
-                    controller.prepare()
-                    controller.playWhenReady = true
-                }
+                // 3. Command immediate playback
+                controller.play()
+                controller.playWhenReady = true
             }
         }
     }
 
-    // When the user actively swipes away to a new song, stop the old one
-    DisposableEffect(currentTrack.previewUrl) {
-        onDispose {
-            mediaController?.stop()
-        }
-    }
+    // --- 2. WE REMOVED THE DISPOSABLE EFFECT THAT WAS KILLING THE AUDIO HERE ---
 
-    // --- 3. THE 60FPS AUDIO TRACKER & CROSSFADE ---
     LaunchedEffect(currentTrack.previewUrl, mediaController) {
         currentProgressMs = 0L
-
         mediaController?.let { controller ->
             while (isActive) {
                 if (controller.isPlaying) {
                     currentProgressMs = controller.currentPosition
-
                     val fadeDurationMs = 2000f
-                    val currentVolume = when {
-                        currentProgressMs < fadeDurationMs -> currentProgressMs / fadeDurationMs
-                        currentProgressMs > (30_000f - fadeDurationMs) -> (30_000f - currentProgressMs) / fadeDurationMs
+                    controller.volume = when {
+                        currentProgressMs < fadeDurationMs -> (currentProgressMs / fadeDurationMs).coerceIn(0f, 1f)
+                        currentProgressMs > (30_000f - fadeDurationMs) -> ((30_000f - currentProgressMs) / fadeDurationMs).coerceIn(0f, 1f)
                         else -> 1.0f
                     }
-
-                    controller.volume = currentVolume.coerceIn(0f, 1f)
-
                     if (currentProgressMs >= 30_000L) {
-                        if (currentTrackIndex < tracks.size - 1) {
-                            currentTrackIndex++
-                            isStashed = false
-                            isLiked = false
-                            currentProgressMs = 0L
-                        }
+                        viewModel.nextTrack() // Safely update global state
+                        isLiked = false
+                        currentProgressMs = 0L
                     }
                 }
                 delay(16L)
@@ -127,95 +140,55 @@ fun FeedScreen(tracks: List<Track>) {
         }
     }
 
-    // --- THE UI ---
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF060709))
-            .padding(horizontal = 20.dp, vertical = 24.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "AUTOPLAY 30s", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text(text = "CRATE #09", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF060709)).padding(horizontal = 20.dp, vertical = 24.dp)) {
+        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("AUTOPLAY 30s", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                // --- 3. DYNAMIC CRATE TITLE ---
+                Text(crateTitle, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 VinylStage(
                     coverArtUrl = currentTrack.coverArtUrl,
                     obscurityScore = currentTrack.obscurityScore,
                     isPlaying = true,
-                    isStashed = isStashed,
+                    isStashed = activeVaultIds.isNotEmpty(),
                     onSleeveClick = {
-                        if (currentTrackIndex < tracks.size - 1) {
-                            currentTrackIndex++
-                            isStashed = false
-                            isLiked = false
-                            currentProgressMs = 0L
-                        }
+                        viewModel.nextTrack() // Safely update global state
+                        isLiked = false
+                        currentProgressMs = 0L
                     }
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 16.dp)
-                ) {
-                    Text(
-                        text = "GRADE A • ${currentTrack.obscurityScore}/100",
-                        color = Color(0xFFD8B4FE),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = currentTrack.title,
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = currentTrack.artist,
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text("GRADE A • ${currentTrack.obscurityScore}/100", color = Color(0xFFD8B4FE), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(currentTrack.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(currentTrack.artist, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    SegmentedScrubber(
-                        currentMs = currentProgressMs,
-                        totalMs = 30000L
-                    )
+                    SegmentedScrubber(currentMs = currentProgressMs, totalMs = 30000L)
                 }
-
                 ActionRail(
-                    isStashed = isStashed,
+                    isStashed = activeVaultIds.isNotEmpty(),
                     isLiked = isLiked,
-                    onStashClick = { isStashed = !isStashed },
-                    onLikeClick = { isLiked = !isLiked },
-                    onSpotifyClick = { /* TODO */ },
-                    onShareClick = { /* TODO */ }
+                    onStashClick = { showStashSheet = true },
+                    onLikeClick = { viewModel.onLikeToggled(currentTrack, isLiked); isLiked = !isLiked },
+                    onSpotifyClick = { },
+                    onShareClick = { }
                 )
             }
         }
+    }
+
+    if (showStashSheet) {
+        StashBottomSheet(
+            vaults = customVaults, activeVaultIds = activeVaultIds, isCurrentlyLiked = isLiked,
+            onDismiss = { showStashSheet = false },
+            onToggleAffinity = { viewModel.onLikeToggled(currentTrack, isLiked); isLiked = !isLiked },
+            onToggleVault = { vaultId, isSaved -> viewModel.onVaultToggled(currentTrack, vaultId, isSaved) },
+            onCreateNewVault = { name -> viewModel.createVault(name) }
+        )
     }
 }

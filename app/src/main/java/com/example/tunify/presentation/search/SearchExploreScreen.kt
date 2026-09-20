@@ -32,46 +32,58 @@ data class GenreCard(val name: String, val color: Color)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchExploreScreen(
-    viewModel: SearchViewModel = hiltViewModel(), // Inject the new Search Brain
-    onGenreClick: (String) -> Unit
+    viewModel: SearchViewModel = hiltViewModel(),
+    onGenreClick: (String) -> Unit,
+    onTrackClick: (com.example.tunify.domain.model.Track, List<com.example.tunify.domain.model.Track>) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
-    // Collect the live search results
     val searchResults by viewModel.searchResults.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
+    // Expanded modern and regional genres
     val genres = listOf(
-        GenreCard("Discover Mix", Color(0xFFD8B4FE)),
+        GenreCard("Discover Mix", Color(0xFFD8B4FE)), // Neon Purple
+        GenreCard("Made For You", Color(0xFFF472B6)), // Pink
+        GenreCard("Fresh Finds", Color(0xFF4ADE80)),  // Vibrant Green
+        GenreCard("Trending", Color(0xFFFBBF24)),     // Gold
+        GenreCard("Bollywood", Color(0xFFF87171)),    // Red
+        GenreCard("Punjabi", Color(0xFF60A5FA)),      // Blue
+        GenreCard("Ghazal Hindi", Color(0xFFA78BFA)), // Soft Purple
         GenreCard("Pop", Color(0xFF86EFAC)),
-        GenreCard("Indie", Color(0xFF60A5FA)),
-        GenreCard("Rock", Color(0xFFF87171)),
-        GenreCard("R&B", Color(0xFFF472B6)),
-        GenreCard("Phonk", Color(0xFFA78BFA)),
+        GenreCard("Hip-hop", Color(0xFFEAB308)),
+        GenreCard("K-Pop", Color(0xFFF43F5E)),
+        GenreCard("Indie", Color(0xFF38BDF8)),
+        GenreCard("Rock", Color(0xFFEF4444)),
+        GenreCard("R&B", Color(0xFFFB923C)),
+        GenreCard("Phonk", Color(0xFF8B5CF6)),
+        GenreCard("Party", Color(0xFF14B8A6)),
+        GenreCard("Love", Color(0xFFF43F5E)),
         GenreCard("Synthwave", Color(0xFF2DD4BF)),
-        GenreCard("Lo-Fi", Color(0xFFFBBF24))
+        GenreCard("Lo-Fi", Color(0xFFFCD34D))
     )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF09090B))
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
+            .padding(top = 24.dp, bottom = 80.dp) // Added bottom padding to clear the nav bar
     ) {
         Text(
             text = "Search",
             color = Color.White,
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp, top = 24.dp)
+            modifier = Modifier.padding(bottom = 16.dp)
         )
 
         OutlinedTextField(
             value = searchQuery,
             onValueChange = {
                 searchQuery = it
-                viewModel.onSearchQueryChanged(it) // Fire the live search as they type!
+                viewModel.onSearchQueryChanged(it)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -88,14 +100,11 @@ fun SearchExploreScreen(
             shape = RoundedCornerShape(8.dp),
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = { focusManager.clearFocus() }
-            )
+            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // DYNAMIC UI SWITCH: If they are typing, show results. If empty, show grid.
         if (searchQuery.isNotBlank()) {
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -109,8 +118,9 @@ fun SearchExploreScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     focusManager.clearFocus()
-                                    // Pass the artist name to the Feed to create a radio station for them
-                                    onGenreClick(track.artist)
+                                    onTrackClick(track, searchResults)
+
+
                                 }
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -124,11 +134,7 @@ fun SearchExploreScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Text(
-                                    text = track.artist,
-                                    color = Color.Gray,
-                                    fontSize = 14.sp
-                                )
+                                Text(text = track.artist, color = Color.Gray, fontSize = 14.sp)
                             }
                         }
                     }
@@ -159,7 +165,7 @@ fun SearchExploreScreen(
                     ) {
                         Text(
                             text = genre.name,
-                            color = if (genre.name == "Discover Mix") Color.Black else Color.White,
+                            color = if (genre.name in listOf("Discover Mix", "Trending", "Fresh Finds", "Pop", "Synthwave", "Lo-Fi", "Party")) Color.Black else Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             modifier = Modifier.align(Alignment.TopStart)
