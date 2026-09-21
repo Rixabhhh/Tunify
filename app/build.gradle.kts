@@ -3,6 +3,7 @@ plugins {
     kotlin("android")
     alias(libs.plugins.kotlin.compose)
     id("com.google.dagger.hilt.android")
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
     alias(libs.plugins.ksp) // KSP is now the only annotation processor
 }
 
@@ -35,6 +36,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -78,6 +80,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Google Gemini AI SDK
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // --- Testing ---
     testImplementation(libs.junit)

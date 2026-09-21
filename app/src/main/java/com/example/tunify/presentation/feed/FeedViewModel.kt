@@ -7,6 +7,8 @@ import com.example.tunify.data.local.UserPreferences
 import com.example.tunify.data.local.entity.VaultEntity
 import com.example.tunify.data.repository.VaultRepository
 import com.example.tunify.domain.model.Track
+import com.example.tunify.domain.model.VibeAnalysis
+import com.example.tunify.domain.repository.AiRepository
 import com.example.tunify.domain.repository.TrackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,9 +22,13 @@ import javax.inject.Inject
 class FeedViewModel @Inject constructor(
     private val trackRepository: TrackRepository,
     private val userPreferences: UserPreferences,
-    private val vaultRepository: VaultRepository // 1. INJECT THIS
+    private val vaultRepository: VaultRepository,
+    private val aiRepository: AiRepository // <-- ADD THIS
 ) : ViewModel() {
 
+    // --- AI VIBE CHECKER STATE ---
+    private val _vibeState = MutableStateFlow<Resource<VibeAnalysis>?>(null)
+    val vibeState: StateFlow<Resource<VibeAnalysis>?> = _vibeState.asStateFlow()
     private val _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
 
@@ -126,5 +132,16 @@ class FeedViewModel @Inject constructor(
                 }
             }
         }
+    }
+    fun analyzeCurrentTrack(track: Track) {
+        viewModelScope.launch {
+            aiRepository.analyzeTrackVibe(track).collect { resource ->
+                _vibeState.value = resource
+            }
+        }
+    }
+
+    fun clearVibeState() {
+        _vibeState.value = null
     }
 }

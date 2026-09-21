@@ -25,6 +25,7 @@ import com.example.tunify.domain.model.Track
 import com.example.tunify.presentation.feed.components.ActionRail
 import com.example.tunify.presentation.feed.components.SegmentedScrubber
 import com.example.tunify.presentation.feed.components.StashBottomSheet
+import com.example.tunify.presentation.feed.components.VibeBottomSheet
 import com.example.tunify.presentation.feed.components.VinylStage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -61,7 +62,7 @@ fun FeedScreen(
     val currentTrackIndex by viewModel.currentTrackIndex.collectAsState()
     val crateTitle by viewModel.currentCrateTitle.collectAsState()
     val currentTrack = tracks[currentTrackIndex]
-
+    val vibeState by viewModel.vibeState.collectAsState()
     var showStashSheet by remember { mutableStateOf(false) }
     val customVaults by viewModel.customVaults.collectAsState()
     val activeVaultIds by viewModel.activeTrackVaultIds.collectAsState()
@@ -176,11 +177,17 @@ fun FeedScreen(
                     onStashClick = { showStashSheet = true },
                     onLikeClick = { viewModel.onLikeToggled(currentTrack, isLiked); isLiked = !isLiked },
                     onSpotifyClick = { },
-                    onShareClick = { }
+                    onShareClick = { },
+                    onVibeCheckClick = { viewModel.analyzeCurrentTrack(currentTrack) } // Trigger the AI Analysis
                 )
             }
         }
     }
+
+    VibeBottomSheet(
+        vibeState = vibeState,
+        onDismiss = { viewModel.clearVibeState() }
+    )
 
     if (showStashSheet) {
         StashBottomSheet(

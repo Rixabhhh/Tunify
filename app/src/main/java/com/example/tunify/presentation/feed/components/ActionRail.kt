@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -46,6 +47,7 @@ fun ActionRail(
     onLikeClick: () -> Unit,
     onSpotifyClick: () -> Unit,
     onShareClick: () -> Unit,
+    onVibeCheckClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -54,35 +56,39 @@ fun ActionRail(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
-        // 1. Stash Button
         HardwareButton(
             icon = Icons.Rounded.Add,
             label = "STASH",
             isActive = isStashed,
-            activeColors = listOf(Color(0xFF10B981), Color(0xFF059669)), // Emerald Green
+            activeColors = listOf(Color(0xFF10B981), Color(0xFF059669)),
             onClick = onStashClick
         )
 
-        // 2. Affinity (Like) Button
         HardwareButton(
             icon = Icons.Filled.Favorite,
             label = "AFFINITY",
             isActive = isLiked,
-            activeColors = listOf(Color(0xFFF43F5E), Color(0xFFE11D48)), // Rose Red
+            activeColors = listOf(Color(0xFFF43F5E), Color(0xFFE11D48)),
             onClick = onLikeClick
         )
 
-        // 3. Spotify / Listen Knob (Always active green style)
         HardwareButton(
-            icon = Icons.Filled.PlayArrow, // Using Play as a fallback for Spotify icon
+            icon = Icons.Filled.AutoAwesome,
+            label = "VIBE",
+            isActive = true,
+            activeColors = listOf(Color(0xFFD8B4FE), Color(0xFFA855F7)),
+            onClick = onVibeCheckClick
+        )
+
+        HardwareButton(
+            icon = Icons.Filled.PlayArrow,
             label = "LISTEN",
             isActive = true,
             isCircular = true,
-            activeColors = listOf(Color(0xFF1ED760), Color(0xFF15803D)), // Spotify Green
+            activeColors = listOf(Color(0xFF1ED760), Color(0xFF15803D)),
             onClick = onSpotifyClick
         )
 
-        // 4. Share Button
         HardwareButton(
             icon = Icons.Filled.Share,
             label = "SHARE",
@@ -105,14 +111,12 @@ private fun HardwareButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Tactile mechanical scale animation
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.88f else 1f,
         animationSpec = tween(durationMillis = 150),
         label = "ButtonScale"
     )
 
-    // Smooth gradient crossfade
     val topColor by animateColorAsState(
         targetValue = if (isActive) activeColors[0] else Color.White.copy(alpha = 0.18f),
         label = "TopColor"

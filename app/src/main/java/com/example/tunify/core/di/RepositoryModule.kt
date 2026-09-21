@@ -1,6 +1,8 @@
 package com.example.tunify.core.di
 
+import com.example.tunify.data.repository.AiRepositoryImpl
 import com.example.tunify.data.repository.TrackRepositoryImpl
+import com.example.tunify.domain.repository.AiRepository
 import com.example.tunify.domain.repository.TrackRepository
 import dagger.Binds
 import dagger.Module
@@ -24,5 +26,11 @@ abstract class RepositoryModule {
     abstract fun bindTrackRepository(
         impl: TrackRepositoryImpl
     ): TrackRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiRepository(
+        aiRepositoryImpl: AiRepositoryImpl
+    ): AiRepository
 
 }
