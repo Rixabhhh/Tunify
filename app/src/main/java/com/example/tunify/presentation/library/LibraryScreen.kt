@@ -18,14 +18,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tunify.data.local.entity.VaultEntity
+import com.example.tunify.ui.theme.EditorialSerif // <-- Imported custom serif font
 
 @Composable
 fun LibraryScreen(
@@ -46,7 +47,7 @@ fun LibraryScreen(
             text = "Your Library",
             color = Color.White,
             fontSize = 32.sp,
-            fontFamily = FontFamily.Serif,
+            fontFamily = EditorialSerif, // <-- Applied to main header
             fontWeight = FontWeight.Bold,
             letterSpacing = (-0.5).sp
         )
@@ -87,7 +88,7 @@ fun LibraryScreen(
                         text = "Affinity Vault",
                         color = Color.White,
                         fontSize = 22.sp,
-                        fontFamily = FontFamily.Serif,
+                        fontFamily = EditorialSerif, // <-- Applied to the Affinity Vault card title
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
@@ -95,6 +96,7 @@ fun LibraryScreen(
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 4.dp)
+                        // No fontFamily specified here, so it automatically inherits your clean Jakarta/Inter sans-serif
                     )
                 }
             }
@@ -107,6 +109,7 @@ fun LibraryScreen(
             color = Color.White,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold
+            // Inherits default sans-serif app font
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -142,17 +145,42 @@ private fun VaultGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                // 1. The Drop Shadow: Physically lifts the card off the pure black background
+                .shadow(
+                    elevation = 12.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    spotColor = Color.Black,
+                    ambientColor = Color.Black
+                )
                 .clip(RoundedCornerShape(16.dp))
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.01f))))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp)),
+                // 2. The 3D Surface: Lighter at the top where "light" hits, fading to dark
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF2A2A35).copy(alpha = 0.6f), // Lighter top surface
+                            Color(0xFF14141A).copy(alpha = 0.3f)  // Darker bottom surface
+                        )
+                    )
+                )
+                // 3. The Physical Edge: A bright rim-light on top, deep shadow on bottom
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.15f), // Top edge highlight
+                            Color.Black.copy(alpha = 0.8f)   // Bottom edge shadow
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
             // Elegant placeholder using the first letter of the vault name
             Text(
                 text = vault.name.take(1).uppercase(),
-                color = Color.White.copy(alpha = 0.2f),
+                color = Color.White.copy(alpha = 0.35f), // Made slightly brighter to match the raised surface
                 fontSize = 48.sp,
-                fontFamily = FontFamily.Serif
+                fontFamily = EditorialSerif
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -163,7 +191,7 @@ private fun VaultGridItem(
             fontWeight = FontWeight.Medium
         )
         Text(
-            text = "Tap to view tracks", // Placeholder until we wire the relational count query
+            text = "Tap to view tracks",
             color = Color.White.copy(alpha = 0.5f),
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 2.dp)

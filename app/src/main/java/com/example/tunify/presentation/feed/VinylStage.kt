@@ -16,7 +16,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -54,7 +56,6 @@ fun VinylStage(
     onSleeveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 1. Continuous Vinyl Spin Animation
     val infiniteTransition = rememberInfiniteTransition(label = "VinylRotation")
     val rotationAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -65,8 +66,11 @@ fun VinylStage(
         label = "RecordSpinAngle"
     )
 
+    // Using strictly defined width/height prevents the parent UI from collapsing it
     Box(
-        modifier = modifier.size(310.dp),
+        modifier = modifier
+            .width(310.dp)
+            .height(240.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         // --- LAYER 1: THE ROTATING VINYL DISC ---
@@ -75,13 +79,14 @@ fun VinylStage(
             obscurityScore = obscurityScore,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .offset(x = 18.dp) // Shifts the vinyl out from behind the sleeve
+                .offset(x = 18.dp)
         )
 
         // --- LAYER 2: ALBUM SLEEVE ---
         Box(
             modifier = Modifier
-                .size(240.dp)
+                .fillMaxHeight()      // Ties the height to the parent's 240.dp
+                .aspectRatio(1f)      // Forces width to match height (perfect square)
                 .align(Alignment.CenterStart)
                 .shadow(
                     elevation = 28.dp,
@@ -109,7 +114,6 @@ fun VinylStage(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // VAULTED / STASHED STAMP OVERLAY
             AnimatedVisibility(
                 visible = isStashed,
                 enter = scaleIn(),
@@ -160,19 +164,17 @@ private fun VinylRecord(
 ) {
     Box(
         modifier = modifier
-            .size(230.dp)
+            .size(230.dp) // Keeps the record slightly smaller than the 240dp sleeve
             .rotate(rotationAngle)
             .shadow(16.dp, CircleShape)
             .clip(CircleShape)
             .background(Color(0xFF0D0D0E))
             .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-            // Concentric tactile sound groove rings
             .border(24.dp, Color(0xFF151619), CircleShape)
             .border(48.dp, Color(0xFF101114), CircleShape)
             .border(72.dp, Color(0xFF18191D), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        // Center Disc Label
         Box(
             modifier = Modifier
                 .size(76.dp)
@@ -203,7 +205,6 @@ private fun VinylRecord(
                 )
             }
 
-            // Center Spindle Hole
             Box(
                 modifier = Modifier
                     .size(9.dp)

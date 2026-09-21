@@ -3,12 +3,21 @@ package com.example.tunify.presentation.feed
 import android.content.ComponentName
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,7 +67,6 @@ fun FeedScreen(
         return
     }
 
-    // --- 1. USE VIEWMODEL STATE INSTEAD OF LOCAL STATE ---
     val currentTrackIndex by viewModel.currentTrackIndex.collectAsState()
     val crateTitle by viewModel.currentCrateTitle.collectAsState()
     val currentTrack = tracks[currentTrackIndex]
@@ -73,6 +81,9 @@ fun FeedScreen(
 
     var isLiked by remember { mutableStateOf(false) }
     var currentProgressMs by remember { mutableLongStateOf(0L) }
+
+    // --- AUTOPLAY STATE ---
+    var isAutoplayEnabled by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
     var mediaController by remember { mutableStateOf<MediaController?>(null) }
@@ -98,26 +109,20 @@ fun FeedScreen(
 
                 val mediaItem = MediaItem.Builder()
                     .setUri(currentTrack.previewUrl)
-                    .setMediaId(currentTrack.id) // Bind strictly to the exact ID
+                    .setMediaId(currentTrack.id)
                     .setMediaMetadata(metadata)
                     .build()
 
-                // 1. Force the player to stop the ghost track in the background
                 controller.stop()
-
-                // 2. Load the exact item you clicked
                 controller.setMediaItem(mediaItem)
                 controller.prepare()
-
-                // 3. Command immediate playback
                 controller.play()
                 controller.playWhenReady = true
             }
         }
     }
 
-    // --- 2. WE REMOVED THE DISPOSABLE EFFECT THAT WAS KILLING THE AUDIO HERE ---
-
+    // --- UPDATED AUDIO LOOP WITH AUTOPLAY TOGGLE LOGIC ---
     LaunchedEffect(currentTrack.previewUrl, mediaController) {
         currentProgressMs = 0L
         mediaController?.let { controller ->
@@ -130,10 +135,19 @@ fun FeedScreen(
                         currentProgressMs > (30_000f - fadeDurationMs) -> ((30_000f - currentProgressMs) / fadeDurationMs).coerceIn(0f, 1f)
                         else -> 1.0f
                     }
+
                     if (currentProgressMs >= 30_000L) {
-                        viewModel.nextTrack() // Safely update global state
-                        isLiked = false
-                        currentProgressMs = 0L
+                        if (isAutoplayEnabled) {
+                            // Proceed to next track automatically
+                            viewModel.nextTrack()
+                            isLiked = false
+                            currentProgressMs = 0L
+                        } else {
+                            // Halt playback and reset progress to the start
+                            controller.pause()
+                            controller.seekTo(0)
+                            currentProgressMs = 0L
+                        }
                     }
                 }
                 delay(16L)
@@ -141,30 +155,98 @@ fun FeedScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF060709)).padding(horizontal = 20.dp, vertical = 24.dp)) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("AUTOPLAY 30s", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                // --- 3. DYNAMIC CRATE TITLE ---
-                Text(crateTitle, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF060709))
+            .padding(horizontal = 24.dp, vertical = 32.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // --- TOP BAR (PILL UI) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Interactive Autoplay Pill
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                        .clickable { isAutoplayEnabled = !isAutoplayEnabled }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(if (isAutoplayEnabled) Color(0xFF34D399) else Color(0xFF4B5563))
+                            .shadow(if (isAutoplayEnabled) 8.dp else 0.dp, spotColor = Color(0xFF34D399))
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "AUTOPLAY 30s",
+                        color = if (isAutoplayEnabled) Color.White else Color.White.copy(alpha = 0.4f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                // 2. Static Crate/Genre Pill
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Album,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = crateTitle.uppercase(),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Spacer(modifier = Modifier.weight(0.7f))
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
                 VinylStage(
                     coverArtUrl = currentTrack.coverArtUrl,
                     obscurityScore = currentTrack.obscurityScore,
-                    isPlaying = true,
+                    isPlaying = mediaController?.isPlaying == true, // Tie rotation to actual playback state
                     isStashed = activeVaultIds.isNotEmpty(),
                     onSleeveClick = {
-                        viewModel.nextTrack() // Safely update global state
+                        viewModel.nextTrack()
                         isLiked = false
                         currentProgressMs = 0L
                     }
                 )
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Spacer(modifier = Modifier.weight(1f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 24.dp)) {
                     Text("GRADE A • ${currentTrack.obscurityScore}/100", color = Color(0xFFD8B4FE), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Text(currentTrack.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(currentTrack.artist, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -178,7 +260,7 @@ fun FeedScreen(
                     onLikeClick = { viewModel.onLikeToggled(currentTrack, isLiked); isLiked = !isLiked },
                     onSpotifyClick = { },
                     onShareClick = { },
-                    onVibeCheckClick = { viewModel.analyzeCurrentTrack(currentTrack) } // Trigger the AI Analysis
+                    onVibeCheckClick = { viewModel.analyzeCurrentTrack(currentTrack) }
                 )
             }
         }
